@@ -184,7 +184,7 @@ async def forgot_password(req: ForgotPasswordRequest):
         {"$set": {"reset_token": token, "reset_token_expires": expires_at}},
     )
 
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:4200").rstrip("/")
+    frontend_url = os.getenv("FRONTEND_URL", "https://nin-frontend.onrender.com").rstrip("/")
     reset_link = f"{frontend_url}/reset-password?token={token}"
     asyncio.create_task(asyncio.to_thread(
         send_password_reset_email, user_doc["name"], req.email, reset_link
