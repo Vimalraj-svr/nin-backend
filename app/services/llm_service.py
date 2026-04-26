@@ -4,8 +4,7 @@ import os
 import re
 
 import httpx
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +13,15 @@ CF_TEXT_WORKER_URL = os.getenv("CF_TEXT_WORKER_URL", "").rstrip("/")
 CF_WORKER_SECRET = os.getenv("CF_WORKER_SECRET", "")
 MODEL_NAME = "gemini-2.5-flash"
 
-_gemini_client: genai.Client | None = None
+_model: genai.GenerativeModel | None = None
 
-def _get_gemini() -> genai.Client:
-    global _gemini_client
-    if _gemini_client is None:
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    return _gemini_client
+
+def _get_model() -> genai.GenerativeModel:
+    global _model
+    if _model is None:
+        genai.configure(api_key=GEMINI_API_KEY)
+        _model = genai.GenerativeModel(MODEL_NAME)
+    return _model
 
 
 async def _generate_via_cf(prompt: str) -> dict:
@@ -47,11 +48,10 @@ async def _generate_via_gemini(prompt: str) -> dict:
     """Generate diary via Gemini."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set")
-    client = _get_gemini()
-    response = await client.aio.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
+    model = _get_model()
+    response = await model.generate_content_async(
+        prompt,
+        generation_config=genai.GenerationConfig(
             temperature=0.5,
             response_mime_type="application/json",
         ),
@@ -73,7 +73,6 @@ async def generate_diary(prompt: str) -> dict:
         except Exception as e:
             logger.warning("CF text worker failed (%s) — falling back to Gemini", e)
 
-    # Gemini fallback
     if not GEMINI_API_KEY:
         return _fallback_error("No text generation service configured.")
     try:
@@ -113,6 +112,7 @@ LANG_NAMES = {
     "te": "Telugu", "kn": "Kannada", "en": "English",
 }
 
+
 def _pronoun_note(gender: str | None) -> str:
     if gender == "male":
         return "Use he/him/his pronouns when referring to the user."
@@ -120,13 +120,13 @@ def _pronoun_note(gender: str | None) -> str:
         return "Use she/her/her pronouns when referring to the user."
     return ""
 
+
 async def generate_weekly_letter(
     name: str,
     entries_summary: str,
     preferred_language: str = "en",
     gender: str | None = None,
 ) -> str:
-    """Generate a warm weekly letter summarising the user's diary entries."""
     lang = LANG_NAMES.get(preferred_language, "English")
     pronoun = _pronoun_note(gender)
     prompt = f"""You are Ninaivugal, a close companion and diary keeper for {name}.
@@ -151,11 +151,10 @@ Write only the letter — no subject line, no metadata."""
     if not GEMINI_API_KEY:
         return f"Your week had its own quiet rhythm, {name}. I saw it all."
     try:
-        client = _get_gemini()
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.85, max_output_tokens=1200),
+        model = _get_model()
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(temperature=0.85, max_output_tokens=1200),
         )
         return response.text.strip()
     except Exception as e:
@@ -164,10 +163,6 @@ Write only the letter — no subject line, no metadata."""
 
 
 async def generate_memory_threads(entries_text: str, name: str, gender: str | None = None) -> list[dict]:
-    """
-    Finds recurring emotional themes and people across entries.
-    Returns a list of { theme, observation, count_hint } objects.
-    """
     pronoun = _pronoun_note(gender)
     prompt = f"""Analyse these diary entries written by {name} and identify 3–5 recurring emotional themes, people, or patterns.
 {f"Pronoun note: {pronoun}" if pronoun else ""}
@@ -185,16 +180,14 @@ Entries:
     if not GEMINI_API_KEY:
         return []
     try:
-        client = _get_gemini()
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
+        model = _get_model()
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
                 temperature=0.6,
                 response_mime_type="application/json",
             ),
         )
-        import json, re
         raw = response.text.strip()
         raw = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
         result = json.loads(raw)
@@ -211,7 +204,6 @@ async def answer_from_entries(
     preferred_language: str = "en",
     gender: str | None = None,
 ) -> str:
-    """Answers a question using only the user's own diary entries as context."""
     lang = LANG_NAMES.get(preferred_language, "English")
     pronoun = _pronoun_note(gender)
     prompt = f"""You are a warm, perceptive assistant answering {name}'s question about their own diary.
@@ -234,11 +226,10 @@ Question: {question}"""
     if not GEMINI_API_KEY:
         return "I don't have enough memories yet to answer that."
     try:
-        client = _get_gemini()
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=600),
+        model = _get_model()
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(temperature=0.7, max_output_tokens=600),
         )
         return response.text.strip()
     except Exception as e:
@@ -259,11 +250,10 @@ async def generate_birthday_wish(name: str, preferred_language: str = "en", gend
         f"Keep it personal, joyful, and under 3 sentences. No JSON — just the wish text."
     )
     try:
-        client = _get_gemini()
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.9),
+        model = _get_model()
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(temperature=0.9),
         )
         return response.text.strip()
     except Exception as e:
