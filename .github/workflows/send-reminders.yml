@@ -1,0 +1,26 @@
+name: Send Daily Reminders
+
+on:
+  schedule:
+    # 13:30 UTC = 19:00 IST — fires every day
+    - cron: '30 13 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub Actions UI
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reminders endpoint
+        run: |
+          response=$(curl -s -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${{ vars.BACKEND_URL }}/api/reminders/send" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP status: $response"
+          cat /tmp/body.json
+
+          if [ "$response" -ne 200 ]; then
+            echo "Reminder endpoint returned non-200 status: $response"
+            exit 1
+          fi
