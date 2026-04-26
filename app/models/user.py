@@ -1,5 +1,5 @@
 from typing import Optional, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class PersonalDetails(BaseModel):
@@ -14,7 +14,7 @@ class PersonalDetails(BaseModel):
 
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
-    email: EmailStr
+    email: str
     preferred_language: str = Field(default="auto")
     gender: str = Field(default="prefer_not_to_say")
     birthday: Optional[str] = None          # YYYY-MM-DD
