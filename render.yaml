@@ -26,3 +26,9 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: "3.11.9"
+      - key: FRONTEND_URL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false

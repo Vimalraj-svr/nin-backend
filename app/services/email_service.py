@@ -64,6 +64,30 @@ def send_welcome_email(name: str, to_email: str, preferred_language: str = "en")
     return _send(to_email, f"Welcome to Ninaivugal, {name}", html)
 
 
+def send_password_reset_email(name: str, to_email: str, reset_link: str) -> bool:
+    html = f"""
+    <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; color: #1a1512; padding: 40px 20px;">
+      <p style="font-size: 28px; font-style: italic; color: #b4854a; margin: 0 0 8px;">Hey {name},</p>
+      <p style="font-size: 17px; line-height: 1.6; color: #5a4e42;">
+        We received a request to reset your Ninaivugal passphrase. Click the button below — the link is valid for 1 hour.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{reset_link}" style="display: inline-block; padding: 14px 32px; background: #1a1512; color: #faf8f5; border-radius: 999px; font-family: sans-serif; font-size: 15px; font-weight: 500; text-decoration: none; letter-spacing: 0.02em;">
+          Reset my passphrase →
+        </a>
+      </div>
+      <p style="font-size: 14px; line-height: 1.6; color: #8a7e72;">
+        If you didn't request this, you can safely ignore this email. Your passphrase won't change.
+      </p>
+      <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 32px 0;" />
+      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+        Ninaivugal · நினைவுகள் · Est. 2026
+      </p>
+    </div>
+    """
+    return _send(to_email, "Reset your Ninaivugal passphrase", html)
+
+
 def send_reminder_email(name: str, to_email: str) -> bool:
     html = f"""
     <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; color: #1a1512; padding: 40px 20px;">

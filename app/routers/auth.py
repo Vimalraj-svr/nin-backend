@@ -1,10 +1,12 @@
 import asyncio
 import logging
-from datetime import timedelta, date
+import os
+import secrets
+from datetime import timedelta, date, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from bson import ObjectId
 
 from app.db import get_mongo_db
@@ -16,13 +18,20 @@ from app.services.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from app.services.email_service import send_welcome_email
+from app.services.email_service import send_welcome_email, send_password_reset_email
 from app.services.llm_service import generate_birthday_wish
 from app.services.transliteration_service import name_in_script
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6)
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -157,3 +166,52 @@ async def delete_me(current_user: UserDB = Depends(get_current_user)):
     await db["users"].delete_one({"_id": ObjectId(current_user.id)})
     await db["entries"].delete_many({"user_id": current_user.id})
     return {"message": "Your account and all entries have been permanently deleted."}
+
+
+@router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    db = get_mongo_db()
+    user_doc = await db["users"].find_one({"email": req.email})
+    # Return the same message regardless to prevent email enumeration
+    generic = {"message": "If that email is registered, a reset link is on its way."}
+    if not user_doc:
+        return generic
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    await db["users"].update_one(
+        {"_id": user_doc["_id"]},
+        {"$set": {"reset_token": token, "reset_token_expires": expires_at}},
+    )
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:4200").rstrip("/")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+    asyncio.create_task(asyncio.to_thread(
+        send_password_reset_email, user_doc["name"], req.email, reset_link
+    ))
+    return generic
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    db = get_mongo_db()
+    now = datetime.now(timezone.utc)
+    user_doc = await db["users"].find_one({
+        "reset_token": req.token,
+        "reset_token_expires": {"$gt": now},
+    })
+    if not user_doc:
+        raise HTTPException(
+            status_code=400,
+            detail="This link has expired or is invalid. Please request a new one.",
+        )
+
+    new_hash = get_password_hash(req.new_password)
+    await db["users"].update_one(
+        {"_id": user_doc["_id"]},
+        {
+            "$set": {"hashed_password": new_hash},
+            "$unset": {"reset_token": "", "reset_token_expires": ""},
+        },
+    )
+    return {"message": "Your passphrase has been reset. You can now sign in."}
