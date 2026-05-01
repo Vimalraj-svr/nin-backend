@@ -5,6 +5,7 @@ import re
 
 import httpx
 import google.generativeai as genai
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,16 @@ async def _generate_via_gemini(prompt: str) -> dict:
     return _parse_json_response(response.text)
 
 
+def _is_rate_limit(err: Exception) -> bool:
+    s = str(err).lower()
+    return any(k in s for k in ("429", "rate limit", "too many", "quota", "resource_exhausted", "exhausted"))
+
+
 async def generate_diary(prompt: str) -> dict:
     """
     Generate a diary entry. Uses Cloudflare Llama worker first (if configured),
     then falls back to Gemini.
+    Raises HTTPException on failure — never saves error text as a diary entry.
     """
     if CF_TEXT_WORKER_URL:
         try:
@@ -71,16 +78,31 @@ async def generate_diary(prompt: str) -> dict:
             logger.info("CF generation OK")
             return result
         except Exception as e:
+            if _is_rate_limit(e):
+                raise HTTPException(
+                    status_code=429,
+                    detail="The AI is a little busy right now. Wait a moment and try again.",
+                )
             logger.warning("CF text worker failed (%s) — falling back to Gemini", e)
 
     if not GEMINI_API_KEY:
-        return _fallback_error("No text generation service configured.")
+        raise HTTPException(status_code=503, detail="No text generation service configured.")
     try:
         logger.info("Generating diary via Gemini (%s)…", MODEL_NAME)
         return await _generate_via_gemini(prompt)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Gemini generation failed: %s", e)
-        return _fallback_error(str(e))
+        if _is_rate_limit(e):
+            raise HTTPException(
+                status_code=429,
+                detail="The AI is a little busy right now. Wait a moment and try again.",
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Something went quiet on our end. Please try again in a moment.",
+        )
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -93,18 +115,11 @@ def _parse_json_response(raw: str) -> dict:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning("Could not parse LLM JSON — returning raw text as fallback")
-        return _fallback_error(raw[:2000] if raw else "The model did not return valid output.")
-
-
-def _fallback_error(detail: str) -> dict:
-    return {
-        "title_original": None,
-        "content_original": None,
-        "title_english": "Generation Error",
-        "content_english": detail,
-        "mood_summary": "unknown",
-    }
+        logger.warning("Could not parse LLM JSON: %s…", raw[:200])
+        raise HTTPException(
+            status_code=503,
+            detail="Something went quiet on our end. Please try again in a moment.",
+        )
 
 
 LANG_NAMES = {

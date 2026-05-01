@@ -53,6 +53,8 @@ async def _transcribe_via_groq(audio_bytes: bytes, suffix: str) -> str:
             result = await client.audio.transcriptions.create(
                 file=(os.path.basename(tmp_path), f.read()),
                 model="whisper-large-v3",
+                prompt="This is a personal diary entry. The language might be English, Tamil, Hindi, Malayalam, Telugu, Kannada, or a code-switched mix like Tanglish or Hinglish. Please transcribe carefully without hallucinations.",
+                temperature=0.0,
                 response_format="json",
             )
         return result.text
