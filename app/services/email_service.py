@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
-SMTP_HOST = "smtp.gmail.com"
+SMTP_HOST = "smtp-relay.brevo.com"
 SMTP_PORT = 587
 
 LANG_GREETINGS = {
@@ -27,7 +27,7 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"Ninaivugal <{SMTP_USER}>"
+        msg["From"] = "Ninaivugal 🌸 <hello@ninaivugal.space>"
         msg["To"] = to_email
         msg.attach(MIMEText(html_body, "html"))
 
@@ -117,7 +117,7 @@ def send_invite_email(to_email: str, inviter_name: str) -> bool:
         Write in Tamil, Hindi, English, Tanglish, or any mix — your diary will shape itself around you.
       </p>
       <div style="margin: 32px 0;">
-        <a href="https://ninaivugal.pages.dev/register"
+        <a href="https://ninaivugal.space/login"
            style="display:inline-block;background:#b4854a;color:#fff;text-decoration:none;
                   padding:12px 28px;border-radius:6px;font-size:14px;letter-spacing:0.06em">
           Join Ninaivugal →
