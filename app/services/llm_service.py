@@ -252,6 +252,81 @@ Question: {question}"""
         return "Something went quiet. Try again in a moment."
 
 
+async def generate_vibe_reading(
+    flag_counts_a: dict[str, int],
+    flag_counts_b: dict[str, int],
+    score: int,
+) -> dict:
+    """
+    AI-generated vibe compatibility reading based on emotional patterns.
+    Returns: label, description, traits_a, traits_b.
+    No romantic framing — reads like a character/soul compatibility.
+    """
+
+    def fmt(counts: dict) -> str:
+        if not counts:
+            return "no strong pattern yet — quietly present"
+        top = sorted(counts.items(), key=lambda x: -x[1])[:5]
+        return ", ".join(f"{k} ({v}×)" for k, v in top)
+
+    prompt = f"""You are reading the emotional character of two diary writers based purely on what emotions they recorded most in their private journals.
+
+Person A's emotional signature:
+{fmt(flag_counts_a)}
+
+Person B's emotional signature:
+{fmt(flag_counts_b)}
+
+Compatibility signal: {score}/100
+
+Generate a vibe compatibility reading. Think of it as a character study — like a perceptive friend who can see both people clearly and describe what their connection might look, sound, and feel like. Not romantic. No love language. No "soulmate" framing.
+
+Focus on:
+- What kind of minds they are
+- Whether they mirror, complement, or create productive friction
+- The texture of what spending time together might feel like
+- The honest truth of their patterns (if one is anxious and the other peaceful, say so with care)
+
+Return ONLY a JSON object with these exact keys:
+- "label": 2–4 words. A poetic shorthand for their dynamic. (e.g. "Still Water & Current", "Two Kinds of Quiet", "The Grounded & The Searching", "Fog and Ember"). Not romantic. Honest.
+- "description": Exactly 2 sentences. Specific to their actual patterns. Poetic but grounded. Something they'd both recognise as true.
+- "traits_a": Array of exactly 3 single-word character traits for Person A. Real words like: reflective, restless, tender, fierce, wistful, grounded, curious, tempestuous, earnest, watchful, searching, warm, turbulent, luminous, patient, melancholic, hopeful, pragmatic, expressive, introspective
+- "traits_b": Array of exactly 3 single-word character traits for Person B. Same style.
+
+No filler, no generic horoscope language. Make it feel like it could only describe these two specific people."""
+
+    fallback = {
+        "label": "Two Quiet Worlds",
+        "description": "Your emotional patterns tell different stories, but both are written with care. There's something here worth exploring.",
+        "traits_a": ["reflective", "earnest", "searching"],
+        "traits_b": ["grounded", "steady", "warm"],
+    }
+
+    if not GEMINI_API_KEY:
+        return fallback
+
+    try:
+        model = _get_model()
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.82,
+                response_mime_type="application/json",
+            ),
+        )
+        raw = response.text.strip()
+        raw = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
+        data = json.loads(raw)
+        if not all(k in data for k in ("label", "description", "traits_a", "traits_b")):
+            raise ValueError("Missing keys in vibe reading response")
+        data["traits_a"] = data["traits_a"][:3]
+        data["traits_b"] = data["traits_b"][:3]
+        return data
+    except Exception as e:
+        logger.error("Vibe reading generation failed: %s", e)
+        return fallback
+
+
 async def generate_birthday_wish(name: str, preferred_language: str = "en", gender: str | None = None) -> str:
     if not GEMINI_API_KEY:
         return f"Happy birthday, {name}! 🎂"

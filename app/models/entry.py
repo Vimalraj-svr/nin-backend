@@ -73,6 +73,7 @@ class EntryDocument(BaseModel):
     comments: List[EntryComment] = Field(default_factory=list)
     is_hidden: bool = False
     emotion_flag: Optional[str] = None       # one of EMOTION_FLAGS
+    shared_with: List[str] = Field(default_factory=list)  # user IDs this entry is shared with
 
 
 class EntryResponse(BaseModel):
@@ -88,8 +89,11 @@ class EntryResponse(BaseModel):
     mood_summary: Optional[str]
     created_at: str
     content_edit: Optional[str] = None
+    title_edit: Optional[str] = None
     emojis: List[str] = Field(default_factory=list)
     images: List[dict] = Field(default_factory=list)
     comments: List[dict] = Field(default_factory=list)
     is_hidden: bool = False
     emotion_flag: Optional[str] = None
+    shared_with: List[str] = Field(default_factory=list)
+    viewer_is_owner: bool = True

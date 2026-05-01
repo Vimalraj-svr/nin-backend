@@ -115,6 +115,14 @@ async def get_me(current_user: UserDB = Depends(get_current_user)):
     return _user_doc_to_response(current_user.model_dump(by_alias=True))
 
 
+@router.get("/firebase-token")
+async def get_firebase_token(current_user: UserDB = Depends(get_current_user)):
+    """Issue a Firebase custom token so the frontend can sign in and listen to Firestore."""
+    from app.services.firebase_service import create_custom_token
+    token = create_custom_token(current_user.id)
+    return {"token": token}
+
+
 @router.get("/birthday-wish")
 async def birthday_wish(current_user: UserDB = Depends(get_current_user)):
     """Returns a personalised birthday wish if today is the user's birthday (IST), else null."""

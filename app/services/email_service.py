@@ -105,3 +105,28 @@ def send_reminder_email(name: str, to_email: str) -> bool:
     </div>
     """
     return _send(to_email, f"Your diary is waiting, {name}", html)
+
+
+def send_invite_email(to_email: str, inviter_name: str) -> bool:
+    html = f"""
+    <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; color: #1a1512; padding: 40px 20px;">
+      <p style="font-size: 17px; line-height: 1.6; color: #5a4e42;">
+        <strong>{inviter_name}</strong> thinks you'd enjoy keeping a diary on Ninaivugal — a private space to write in your own words, your own language.
+      </p>
+      <p style="font-size: 15px; line-height: 1.6; color: #8a7e72; font-style: italic;">
+        Write in Tamil, Hindi, English, Tanglish, or any mix — your diary will shape itself around you.
+      </p>
+      <div style="margin: 32px 0;">
+        <a href="https://ninaivugal.pages.dev/register"
+           style="display:inline-block;background:#b4854a;color:#fff;text-decoration:none;
+                  padding:12px 28px;border-radius:6px;font-size:14px;letter-spacing:0.06em">
+          Join Ninaivugal →
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 24px 0;" />
+      <p style="font-size: 11px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+        Ninaivugal · நினைவுகள் · Your memories, your language
+      </p>
+    </div>
+    """
+    return _send(to_email, f"{inviter_name} invited you to Ninaivugal", html)

@@ -22,7 +22,14 @@ async def init_db():
 
     # Ensure indexes
     await _db["entries"].create_index([("user_id", 1), ("created_at", -1)])
+    await _db["entries"].create_index([("shared_with", 1), ("created_at", -1)])
     await _db["users"].create_index([("email", 1)], unique=True)
+    await _db["users"].create_index([("name", 1)])
+    await _db["follows"].create_index([("follower_id", 1), ("following_id", 1)], unique=True)
+    await _db["follows"].create_index([("following_id", 1)])
+    await _db["restrictions"].create_index([("user_id", 1), ("target_id", 1)], unique=True)
+    await _db["notifications"].create_index([("user_id", 1), ("created_at", -1)])
+    await _db["vibe_checks"].create_index([("from_id", 1), ("to_id", 1)], unique=True)
 
 
 async def close_db():

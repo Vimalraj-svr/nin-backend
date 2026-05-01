@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import pytz
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel
@@ -56,6 +56,8 @@ def _serialize(doc: dict) -> dict:
         "comments": comments,
         "is_hidden": doc.get("is_hidden", False),
         "emotion_flag": doc.get("emotion_flag"),
+        "shared_with": doc.get("shared_with") or [],
+        "viewer_is_owner": True,
     }
 
 
@@ -246,6 +248,44 @@ async def weekly_letter(current_user: UserDB = Depends(get_current_user)):
     return {"letter": letter, "entry_count": len(docs)}
 
 
+@router.get("/shared-with-me")
+async def shared_with_me(
+    current_user: UserDB = Depends(get_current_user),
+    from_user_id: str = Query(None),
+):
+    """Entries that other users have shared with the current user."""
+    db = get_mongo_db()
+    query: dict = {"shared_with": current_user.id}
+    if from_user_id:
+        query["user_id"] = from_user_id
+    cursor = db["entries"].find(
+        query,
+        {"embedding": 0},
+    ).sort("created_at", -1).limit(50)
+    docs = await cursor.to_list(length=50)
+    if not docs:
+        return []
+
+    from bson import ObjectId
+    owner_ids = list({d["user_id"] for d in docs})
+    try:
+        owner_docs = await db["users"].find(
+            {"_id": {"$in": [ObjectId(oid) for oid in owner_ids]}},
+            {"_id": 1, "name": 1},
+        ).to_list(length=None)
+        owner_names = {str(u["_id"]): u["name"] for u in owner_docs}
+    except Exception:
+        owner_names = {}
+
+    result = []
+    for doc in docs:
+        s = _serialize(doc)
+        s["viewer_is_owner"] = False
+        s["shared_by_name"] = owner_names.get(doc["user_id"], "Someone")
+        result.append(s)
+    return result
+
+
 @router.get("/{entry_id}", response_model=EntryResponse)
 async def get_entry(
     entry_id: str,
@@ -253,12 +293,20 @@ async def get_entry(
 ):
     db = get_mongo_db()
     doc = await db["entries"].find_one(
-        {"id": entry_id, "user_id": current_user.id},
+        {
+            "id": entry_id,
+            "$or": [
+                {"user_id": current_user.id},
+                {"shared_with": current_user.id},
+            ],
+        },
         {"embedding": 0},
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Entry not found.")
-    return _serialize(doc)
+    s = _serialize(doc)
+    s["viewer_is_owner"] = (doc["user_id"] == current_user.id)
+    return s
 
 
 class ChatRequest(BaseModel):
@@ -553,6 +601,81 @@ async def get_shared_entry(token: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Entry not found.")
     return _serialize(doc)
+
+
+class ShareWithRequest(BaseModel):
+    user_id: str
+
+
+@router.post("/{entry_id}/share-with")
+async def add_share_with(
+    entry_id: str,
+    req: ShareWithRequest,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Share an entry with a specific user by user_id."""
+    from bson import ObjectId
+    db = get_mongo_db()
+
+    doc = await db["entries"].find_one({"id": entry_id, "user_id": current_user.id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+
+    try:
+        target = await db["users"].find_one(
+            {"_id": ObjectId(req.user_id)}, {"_id": 1, "name": 1}
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    # Respect the target's restriction of the current user
+    blocked = await db["restrictions"].find_one(
+        {"user_id": req.user_id, "target_id": current_user.id}
+    )
+    if blocked:
+        raise HTTPException(status_code=403, detail="You cannot share with this user.")
+
+    already_shared = req.user_id in (doc.get("shared_with") or [])
+    if not already_shared:
+        import uuid as _uuid
+        now = datetime.now(timezone.utc)
+        await db["entries"].update_one(
+            {"id": entry_id},
+            {"$push": {"shared_with": req.user_id}},
+        )
+        notif = {
+            "id": str(_uuid.uuid4()),
+            "user_id": req.user_id,
+            "type": "shared_memory",
+            "actor_id": current_user.id,
+            "actor_name": current_user.name,
+            "entry_id": entry_id,
+            "read": False,
+            "created_at": now,
+        }
+        from app.services.firebase_service import write_notification
+        write_notification(req.user_id, notif)
+    return {"message": "Shared.", "shared_with_name": target.get("name", "")}
+
+
+@router.delete("/{entry_id}/share-with/{user_id}")
+async def remove_share_with(
+    entry_id: str,
+    user_id: str,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Remove a user from an entry's shared_with list."""
+    db = get_mongo_db()
+    doc = await db["entries"].find_one({"id": entry_id, "user_id": current_user.id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+    await db["entries"].update_one(
+        {"id": entry_id},
+        {"$pull": {"shared_with": user_id}},
+    )
+    return {"message": "Removed from shared."}
 
 
 class PatchEntryRequest(BaseModel):

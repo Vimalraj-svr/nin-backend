@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db, close_db
-from app.routers import entries, health, auth, reminders
+from app.routers import entries, health, auth, reminders, social
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +46,7 @@ app.include_router(health.router)
 app.include_router(entries.router)
 app.include_router(auth.router)
 app.include_router(reminders.router)
+app.include_router(social.router)
 
 
 @app.get("/", tags=["root"])
