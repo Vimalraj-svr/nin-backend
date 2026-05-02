@@ -63,8 +63,11 @@ def send_welcome_email(name: str, to_email: str, preferred_language: str = "en")
         {tagline}
       </p>
       <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">
         Ninaivugal · நினைவுகள் · Est. 2026
+      </p>
+      <p style="font-size: 12px; color: #b0a898; margin: 0;">
+        For support or queries, write to <a href="mailto:hello@ninaivugal.space" style="color: #b4854a; text-decoration: none;">hello@ninaivugal.space</a>
       </p>
     </div>
     """
@@ -87,8 +90,11 @@ def send_password_reset_email(name: str, to_email: str, reset_link: str) -> bool
         If you didn't request this, you can safely ignore this email. Your passphrase won't change.
       </p>
       <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">
         Ninaivugal · நினைவுகள் · Est. 2026
+      </p>
+      <p style="font-size: 12px; color: #b0a898; margin: 0;">
+        For support or queries, write to <a href="mailto:hello@ninaivugal.space" style="color: #b4854a; text-decoration: none;">hello@ninaivugal.space</a>
       </p>
     </div>
     """
@@ -113,8 +119,11 @@ def send_reminder_email(name: str, to_email: str) -> bool:
         </a>
       </div>
       <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+      <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">
         Ninaivugal · நினைவுகள்
+      </p>
+      <p style="font-size: 12px; color: #b0a898; margin: 0;">
+        For support or queries, write to <a href="mailto:hello@ninaivugal.space" style="color: #b4854a; text-decoration: none;">hello@ninaivugal.space</a>
       </p>
     </div>
     """
@@ -138,8 +147,11 @@ def send_invite_email(to_email: str, inviter_name: str) -> bool:
         </a>
       </div>
       <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 24px 0;" />
-      <p style="font-size: 11px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
+      <p style="font-size: 11px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">
         Ninaivugal · நினைவுகள் · Your memories, your language
+      </p>
+      <p style="font-size: 11px; color: #b0a898; margin: 0;">
+        For support or queries, write to <a href="mailto:hello@ninaivugal.space" style="color: #b4854a; text-decoration: none;">hello@ninaivugal.space</a>
       </p>
     </div>
     """
