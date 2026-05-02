@@ -1,15 +1,10 @@
 import os
-import smtplib
 import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import httpx
 
 logger = logging.getLogger(__name__)
 
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
-SMTP_HOST = "smtp-relay.brevo.com"
-SMTP_PORT = 587
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
 
 LANG_GREETINGS = {
     "ta": ("வணக்கம்", "உங்கள் நினைவுகளை எழுத தொடங்குங்கள்."),
@@ -21,21 +16,33 @@ LANG_GREETINGS = {
 
 
 def _send(to_email: str, subject: str, html_body: str) -> bool:
-    if not SMTP_USER or not SMTP_PASS:
-        logger.warning("SMTP credentials not configured — skipping email to %s", to_email)
+    if not BREVO_API_KEY:
+        logger.warning("BREVO_API_KEY not configured — skipping email to %s", to_email)
         return False
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = "Ninaivugal 🌸 <hello@ninaivugal.space>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_body, "html"))
-
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.sendmail(SMTP_USER, to_email, msg.as_string())
-        logger.info("Email sent to %s: %s", to_email, subject)
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": BREVO_API_KEY,
+            "content-type": "application/json",
+        }
+        payload = {
+            "sender": {
+                "email": "hello@ninaivugal.space",
+                "name": "Ninaivugal 🌸"
+            },
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "htmlContent": html_body
+        }
+        
+        response = httpx.post(url, headers=headers, json=payload, timeout=15.0)
+        response.raise_for_status()
+        
+        # Log successful message ID if present
+        resp_data = response.json()
+        msg_id = resp_data.get("messageId") or resp_data.get("messageIds", [""])[0]
+        logger.info("Email sent to %s: %s (ID: %s)", to_email, subject, msg_id)
         return True
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, e)
