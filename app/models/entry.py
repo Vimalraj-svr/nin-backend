@@ -12,7 +12,7 @@ SUPPORTED_LANGUAGES = {
     'te': 'Telugu',
     'kn': 'Kannada',
     'bilingual': 'Bilingual',
-    'auto': 'Auto-detect',
+    # 'auto': 'Auto-detect',
 }
 
 OUTPUT_MODE_FOR_LANG = {
@@ -51,6 +51,22 @@ class EntryComment(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class SharedComment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_name: str
+    text: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class SharedReaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_name: str
+    emoji: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class EntryDocument(BaseModel):
     """Full MongoDB document shape."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -74,6 +90,8 @@ class EntryDocument(BaseModel):
     is_hidden: bool = False
     emotion_flag: Optional[str] = None       # one of EMOTION_FLAGS
     shared_with: List[str] = Field(default_factory=list)  # user IDs this entry is shared with
+    shared_comments: List[SharedComment] = Field(default_factory=list)
+    shared_reactions: List[SharedReaction] = Field(default_factory=list)
 
 
 class EntryResponse(BaseModel):
@@ -97,3 +115,6 @@ class EntryResponse(BaseModel):
     emotion_flag: Optional[str] = None
     shared_with: List[str] = Field(default_factory=list)
     viewer_is_owner: bool = True
+    shared_by_name: Optional[str] = None
+    shared_comments: List[dict] = Field(default_factory=list)
+    shared_reactions: List[dict] = Field(default_factory=list)

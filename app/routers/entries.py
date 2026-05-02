@@ -37,6 +37,20 @@ def _serialize(doc: dict) -> dict:
             c2["created_at"] = c2["created_at"].isoformat()
         comments.append(c2)
 
+    shared_comments = []
+    for c in (doc.get("shared_comments") or []):
+        c2 = dict(c)
+        if hasattr(c2.get("created_at"), "isoformat"):
+            c2["created_at"] = c2["created_at"].isoformat()
+        shared_comments.append(c2)
+
+    shared_reactions = []
+    for r in (doc.get("shared_reactions") or []):
+        r2 = dict(r)
+        if hasattr(r2.get("created_at"), "isoformat"):
+            r2["created_at"] = r2["created_at"].isoformat()
+        shared_reactions.append(r2)
+
     return {
         "id": doc.get("id", str(doc.get("_id", ""))),
         "transcript": decrypt_if_present(doc.get("transcript", "")),
@@ -58,6 +72,8 @@ def _serialize(doc: dict) -> dict:
         "emotion_flag": doc.get("emotion_flag"),
         "shared_with": doc.get("shared_with") or [],
         "viewer_is_owner": True,
+        "shared_comments": shared_comments,
+        "shared_reactions": shared_reactions,
     }
 
 
@@ -286,11 +302,32 @@ async def shared_with_me(
     return result
 
 
+@router.get("/shared-by-me-with/{user_id}")
+async def shared_by_me_with(
+    user_id: str,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Entries the current user has shared with a specific user."""
+    db = get_mongo_db()
+    cursor = db["entries"].find(
+        {"user_id": current_user.id, "shared_with": user_id},
+        {"embedding": 0},
+    ).sort("created_at", -1).limit(50)
+    docs = await cursor.to_list(length=50)
+    result = []
+    for doc in docs:
+        s = _serialize(doc)
+        s["viewer_is_owner"] = True
+        result.append(s)
+    return result
+
+
 @router.get("/{entry_id}", response_model=EntryResponse)
 async def get_entry(
     entry_id: str,
     current_user: UserDB = Depends(get_current_user),
 ):
+    from bson import ObjectId
     db = get_mongo_db()
     doc = await db["entries"].find_one(
         {
@@ -305,7 +342,23 @@ async def get_entry(
     if not doc:
         raise HTTPException(status_code=404, detail="Entry not found.")
     s = _serialize(doc)
-    s["viewer_is_owner"] = (doc["user_id"] == current_user.id)
+    is_owner = (doc["user_id"] == current_user.id)
+    s["viewer_is_owner"] = is_owner
+
+    if not is_owner:
+        viewer_id = current_user.id
+        # Shared viewers see only their own shared items
+        s["shared_comments"] = [c for c in s["shared_comments"] if c.get("user_id") == viewer_id]
+        s["shared_reactions"] = [r for r in s["shared_reactions"] if r.get("user_id") == viewer_id]
+        # Include owner name for attribution in UI
+        try:
+            owner_doc = await db["users"].find_one(
+                {"_id": ObjectId(doc["user_id"])}, {"name": 1}
+            )
+            s["shared_by_name"] = owner_doc.get("name", "Someone") if owner_doc else "Someone"
+        except Exception:
+            s["shared_by_name"] = "Someone"
+
     return s
 
 
@@ -812,6 +865,114 @@ async def delete_comment(
         {"$pull": {"comments": {"id": comment_id}}},
     )
     return {"message": "Comment removed.", "id": comment_id}
+
+
+class SharedCommentRequest(BaseModel):
+    text: str
+
+
+@router.post("/{entry_id}/shared-comments")
+async def add_shared_comment(
+    entry_id: str,
+    req: SharedCommentRequest,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """A shared viewer adds a comment on an entry shared with them."""
+    import uuid as _uuid
+    from datetime import datetime as _dt, timezone as _tz
+    db = get_mongo_db()
+    doc = await db["entries"].find_one({"id": entry_id, "shared_with": current_user.id})
+    if not doc:
+        raise HTTPException(status_code=403, detail="Not authorised.")
+    comment = {
+        "id": str(_uuid.uuid4()),
+        "user_id": current_user.id,
+        "user_name": current_user.name,
+        "text": req.text,
+        "created_at": _dt.now(_tz.utc),
+    }
+    await db["entries"].update_one({"id": entry_id}, {"$push": {"shared_comments": comment}})
+    comment["created_at"] = comment["created_at"].isoformat()
+    return comment
+
+
+@router.delete("/{entry_id}/shared-comments/{comment_id}")
+async def delete_shared_comment(
+    entry_id: str,
+    comment_id: str,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Remove a shared comment (own comment, or owner can remove any)."""
+    db = get_mongo_db()
+    doc = await db["entries"].find_one({
+        "id": entry_id,
+        "$or": [{"user_id": current_user.id}, {"shared_with": current_user.id}],
+    })
+    if not doc:
+        raise HTTPException(status_code=403, detail="Not authorised.")
+    is_owner = doc["user_id"] == current_user.id
+    pull_filter = {"id": comment_id} if is_owner else {"id": comment_id, "user_id": current_user.id}
+    await db["entries"].update_one({"id": entry_id}, {"$pull": {"shared_comments": pull_filter}})
+    return {"message": "Comment removed.", "id": comment_id}
+
+
+class SharedReactionRequest(BaseModel):
+    emoji: str
+
+
+@router.post("/{entry_id}/shared-reactions")
+async def toggle_shared_reaction(
+    entry_id: str,
+    req: SharedReactionRequest,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Toggle a shared reaction emoji (adds if not present, removes if already added)."""
+    import uuid as _uuid
+    from datetime import datetime as _dt, timezone as _tz
+    db = get_mongo_db()
+    doc = await db["entries"].find_one({"id": entry_id, "shared_with": current_user.id})
+    if not doc:
+        raise HTTPException(status_code=403, detail="Not authorised.")
+    existing = next(
+        (r for r in (doc.get("shared_reactions") or [])
+         if r.get("user_id") == current_user.id and r.get("emoji") == req.emoji),
+        None,
+    )
+    if existing:
+        await db["entries"].update_one(
+            {"id": entry_id}, {"$pull": {"shared_reactions": {"id": existing["id"]}}}
+        )
+        return {"toggled": "off", "id": existing["id"]}
+    reaction = {
+        "id": str(_uuid.uuid4()),
+        "user_id": current_user.id,
+        "user_name": current_user.name,
+        "emoji": req.emoji,
+        "created_at": _dt.now(_tz.utc),
+    }
+    await db["entries"].update_one({"id": entry_id}, {"$push": {"shared_reactions": reaction}})
+    reaction["created_at"] = reaction["created_at"].isoformat()
+    return {"toggled": "on", **reaction}
+
+
+@router.delete("/{entry_id}/shared-reactions/{reaction_id}")
+async def delete_shared_reaction(
+    entry_id: str,
+    reaction_id: str,
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Remove a shared reaction (own, or owner can remove any)."""
+    db = get_mongo_db()
+    doc = await db["entries"].find_one({
+        "id": entry_id,
+        "$or": [{"user_id": current_user.id}, {"shared_with": current_user.id}],
+    })
+    if not doc:
+        raise HTTPException(status_code=403, detail="Not authorised.")
+    is_owner = doc["user_id"] == current_user.id
+    pull_filter = {"id": reaction_id} if is_owner else {"id": reaction_id, "user_id": current_user.id}
+    await db["entries"].update_one({"id": entry_id}, {"$pull": {"shared_reactions": pull_filter}})
+    return {"message": "Reaction removed.", "id": reaction_id}
 
 
 @router.delete("/{entry_id}")
