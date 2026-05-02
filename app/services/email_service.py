@@ -105,6 +105,13 @@ def send_reminder_email(name: str, to_email: str) -> bool:
       <p style="font-size: 15px; font-style: italic; color: #8a7e72;">
         Your pages are waiting.
       </p>
+      <div style="margin: 32px 0;">
+        <a href="https://ninaivugal.space/compose"
+           style="display:inline-block;background:#1a1512;color:#faf8f5;text-decoration:none;
+                  padding:14px 32px;border-radius:999px;font-family:sans-serif;font-size:15px;font-weight:500;letter-spacing:0.02em;">
+          Write your entry →
+        </a>
+      </div>
       <hr style="border: none; border-top: 1px solid #e8e0d4; margin: 32px 0;" />
       <p style="font-size: 12px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase;">
         Ninaivugal · நினைவுகள்
