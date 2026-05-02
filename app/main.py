@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Ninaivugal API",
-    description="நினைவுகள் — Multilingual AI Diary. Powered by Gemini + Groq Whisper.",
+    description="நினைவுகள் — Multilingual AI Diary.",
     version="2.0.0",
     lifespan=lifespan,
 )

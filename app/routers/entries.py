@@ -64,7 +64,7 @@ def _serialize(doc: dict) -> dict:
         "mood_summary": decrypt_if_present(doc.get("mood_summary")),
         "created_at": created_str,
         "content_edit": decrypt_if_present(doc.get("content_edit")),
-        "title_edit": doc.get("title_edit"),
+        "title_edit": decrypt_if_present(doc.get("title_edit")),
         "emojis": doc.get("emojis") or [],
         "images": doc.get("images") or [],
         "comments": comments,
@@ -107,6 +107,15 @@ async def generate_entry(
     if await has_entry_for_date(db, current_user.id, target):
         _already_written_error(target.isoformat())
 
+    # Minimum transcript length guard
+    transcript_clean = (req.transcript or "").strip()
+    word_count = len(transcript_clean.split())
+    if len(transcript_clean) < 30 or word_count < 5:
+        raise HTTPException(
+            status_code=422,
+            detail="Your entry is a little short for me to work with. Write at least a few sentences so your day comes through clearly."
+        )
+
     preferred = req.language_override or current_user.preferred_language or "auto"
     entry = await run_pipeline(
         transcript=req.transcript,
@@ -145,6 +154,14 @@ async def voice_generate(
         raise HTTPException(
             status_code=422,
             detail="I couldn't make out any words in that recording. Try speaking a little closer to the mic, or type your entry instead."
+        )
+
+    # Minimum transcript length guard
+    word_count = len(transcript.strip().split())
+    if len(transcript.strip()) < 30 or word_count < 5:
+        raise HTTPException(
+            status_code=422,
+            detail="That recording was a little too brief. Speak for a bit longer — a few sentences help capture your day more clearly."
         )
 
     preferred = language_override.strip() or current_user.preferred_language or "auto"
@@ -756,7 +773,7 @@ async def patch_entry(
     if req.content_edit is not None:
         updates["content_edit"] = encrypt_if_present(req.content_edit)
     if req.title_edit is not None:
-        updates["title_edit"] = req.title_edit
+        updates["title_edit"] = encrypt_if_present(req.title_edit)
     if req.emojis is not None:
         updates["emojis"] = req.emojis
     if req.emotion_flag is not None:

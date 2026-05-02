@@ -90,4 +90,4 @@ async def transcribe_audio(audio_file: UploadFile) -> str:
         return text
     except Exception as e:
         logger.error("Groq transcription failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Audio transcription failed: {e}")
+        raise HTTPException(status_code=500, detail="Voice transcription failed. Please try again.")

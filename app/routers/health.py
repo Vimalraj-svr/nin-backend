@@ -8,7 +8,7 @@ router = APIRouter(tags=["health"])
 async def health_check():
     return {
         "status": "ok",
-        "gemini": "configured" if os.getenv("GEMINI_API_KEY") else "missing GEMINI_API_KEY",
-        "groq": "configured" if os.getenv("GROQ_API_KEY") else "missing GROQ_API_KEY",
+        "ai": "configured" if os.getenv("GEMINI_API_KEY") else "unavailable",
+        "voice": "configured" if os.getenv("GROQ_API_KEY") else "unavailable",
         "storage": "mongodb",
     }
