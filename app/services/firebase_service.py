@@ -3,19 +3,27 @@ import threading
 from pathlib import Path
 from datetime import timezone
 
-import firebase_admin
-from firebase_admin import credentials, firestore, auth as fb_auth
-from google.cloud.firestore_v1.base_query import FieldFilter
-
 logger = logging.getLogger(__name__)
 
-_app: firebase_admin.App | None = None
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore, auth as fb_auth
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    _FIREBASE_PKG = True
+except ImportError:
+    logger.warning("firebase-admin package not installed — Firebase/Firestore disabled")
+    firebase_admin = None  # type: ignore[assignment]
+    _FIREBASE_PKG = False
+
+_app = None
 _init_lock = threading.Lock()
 _KEYS_PATH = Path(__file__).parent.parent.parent / "firebase" / "keys.json"
 
 
-def _get_app() -> firebase_admin.App | None:
+def _get_app():
     global _app
+    if not _FIREBASE_PKG:
+        return None
     if _app is not None:
         return _app
     with _init_lock:

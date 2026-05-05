@@ -184,10 +184,21 @@ async def list_entries(
 ):
     db = get_mongo_db()
     cursor = db["entries"].find(
-        {"user_id": current_user.id},
+        {"user_id": current_user.id, "is_hidden": {"$ne": True}},
         {"embedding": 0},
     ).sort("created_at", -1).skip(skip).limit(limit)
     docs = await cursor.to_list(length=limit)
+    return [_serialize(d) for d in docs]
+
+
+@router.get("/hidden", response_model=list[EntryResponse])
+async def list_hidden_entries(current_user: UserDB = Depends(get_current_user)):
+    db = get_mongo_db()
+    cursor = db["entries"].find(
+        {"user_id": current_user.id, "is_hidden": True},
+        {"embedding": 0},
+    ).sort("created_at", -1)
+    docs = await cursor.to_list(length=200)
     return [_serialize(d) for d in docs]
 
 
@@ -449,6 +460,7 @@ async def on_this_day(current_user: UserDB = Depends(get_current_user)):
             {
                 "user_id": current_user.id,
                 "created_at": {"$gte": start_utc, "$lt": end_utc},
+                "is_hidden": {"$ne": True},
             },
             {"embedding": 0},
             sort=[("created_at", -1)],
