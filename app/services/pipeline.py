@@ -45,16 +45,34 @@ async def has_entry_for_date(db: AsyncIOMotorDatabase, user_id: str, d: date) ->
     return count > 0
 
 
+async def has_generated_for_date(db: AsyncIOMotorDatabase, user_id: str, d: date) -> bool:
+    """
+    Returns True if the user has already used AI generation for IST date `d`.
+    Checked against generation_log — survives entry deletion.
+    """
+    count = await db["generation_log"].count_documents({"user_id": user_id, "date": d.isoformat()})
+    return count > 0
+
+
+async def record_generation(db: AsyncIOMotorDatabase, user_id: str, d: date) -> None:
+    """Stamp that the user consumed their generation slot for IST date `d`."""
+    await db["generation_log"].update_one(
+        {"user_id": user_id, "date": d.isoformat()},
+        {"$set": {"user_id": user_id, "date": d.isoformat()}},
+        upsert=True,
+    )
+
+
 async def get_available_dates(db: AsyncIOMotorDatabase, user_id: str, days: int = 3) -> list[str]:
     """
     Returns ISO date strings (YYYY-MM-DD, IST) for the last `days` days
-    that do NOT yet have an entry — up to `days` results, newest first.
+    that have not yet had AI generation — up to `days` results, newest first.
     """
     today = datetime.now(IST).date()
     available = []
     for i in range(days):
         d = today - timedelta(days=i)
-        if not await has_entry_for_date(db, user_id, d):
+        if not await has_generated_for_date(db, user_id, d):
             available.append(d.isoformat())
     return available
 

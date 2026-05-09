@@ -14,7 +14,7 @@ from app.services.auth import get_current_user
 from app.services.encryption_service import decrypt_if_present
 from app.services.groq_service import transcribe_audio
 from app.services.llm_service import generate_weekly_letter, generate_memory_threads, answer_from_entries
-from app.services.pipeline import run_pipeline, has_entry_for_date, get_available_dates
+from app.services.pipeline import run_pipeline, has_entry_for_date, has_generated_for_date, record_generation, get_available_dates
 from datetime import date as date_type
 
 IST = pytz.timezone("Asia/Kolkata")
@@ -104,7 +104,7 @@ async def generate_entry(
         from app.services.pipeline import IST as _IST
         target = _dt.now(_IST).date()
 
-    if await has_entry_for_date(db, current_user.id, target):
+    if await has_generated_for_date(db, current_user.id, target):
         _already_written_error(target.isoformat())
 
     # Minimum transcript length guard
@@ -125,6 +125,7 @@ async def generate_entry(
         language_override=req.language_override,
         entry_date=req.entry_date,
     )
+    await record_generation(db, current_user.id, target)
     return _serialize(entry)
 
 
@@ -144,7 +145,7 @@ async def voice_generate(
         from app.services.pipeline import IST as _IST
         target = _dt.now(_IST).date()
 
-    if await has_entry_for_date(db, current_user.id, target):
+    if await has_generated_for_date(db, current_user.id, target):
         _already_written_error(target.isoformat())
 
     transcript = await transcribe_audio(audio)
@@ -173,6 +174,7 @@ async def voice_generate(
         language_override=language_override.strip() or None,
         entry_date=entry_date_clean,
     )
+    await record_generation(db, current_user.id, target)
     return _serialize(entry)
 
 
