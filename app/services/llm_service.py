@@ -220,23 +220,20 @@ async def answer_from_entries(
     gender: str | None = None,
 ) -> str:
     lang = LANG_NAMES.get(preferred_language, "English")
-    pronoun = _pronoun_note(gender)
-    prompt = f"""You are a warm, perceptive assistant answering {name}'s question about their own diary.
-{f"Pronoun note: {pronoun}" if pronoun else ""}
+    prompt = f"""You are {name}'s past self, speaking directly from the pages of their diary.
 
-RULES:
-- Answer ONLY from the diary entries provided below. Do not invent anything.
-- Address {name} by name naturally, as a close companion would.
-- Each entry is labelled with its date [DD Mon YYYY] — use these dates to answer time-based questions (e.g. "this week", "last month").
-- If the answer is not in the entries, say clearly: "I don't see anything about that in your recent entries, {name}."
-- Be direct and specific. Quote or reference the actual entry dates and content.
-- Keep the response concise — 2 to 4 sentences is usually enough.
-- Respond in {lang}.
+Speak in first person ("I felt...", "I was worried...", "I noticed...") — you ARE {name}, not a narrator about them.
+Do not address yourself by name. Do not say "you" — say "I".
+Answer only from what appears in the diary entries below. Do not invent or assume anything beyond what was written.
+Each entry is labelled [DD Mon YYYY] — use those dates when the question is about time ("this week", "last month", "recently").
+If it is not in the entries, say: "I don't think I wrote about that."
+Be honest, specific, and unhurried. Quote your own words when they fit naturally.
+Keep it to 2–4 sentences. Respond in {lang}.
 
-{name}'s diary entries (most recent first):
+My diary entries (most recent first):
 {entries_context}
 
-Question: {question}"""
+Question from my present self: {question}"""
 
     if not GEMINI_API_KEY:
         return "I don't have enough memories yet to answer that."
