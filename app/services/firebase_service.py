@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import threading
 import time
 from datetime import timezone
@@ -8,6 +9,24 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _KEYS_PATH = Path(__file__).parent.parent.parent / "firebase" / "keys.json"
+
+
+def _load_service_account() -> dict | None:
+    """Load service account from env var or fallback to file."""
+    raw = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception as e:
+            logger.warning("FIREBASE_SERVICE_ACCOUNT_JSON is set but invalid JSON: %s", e)
+            return None
+    if _KEYS_PATH.exists():
+        try:
+            with open(_KEYS_PATH) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("Could not read %s: %s", _KEYS_PATH, e)
+    return None
 
 # ── Firestore client ───────────────────────────────────────────────────────────
 
@@ -32,17 +51,17 @@ def _db():
     with _db_lock:
         if _db_client is not None:
             return _db_client
-        if not _KEYS_PATH.exists():
-            logger.warning("Firebase keys not found at %s — Firestore disabled", _KEYS_PATH)
+        sa = _load_service_account()
+        if sa is None:
+            logger.warning("Firebase service account not found — Firestore disabled. "
+                           "Set FIREBASE_SERVICE_ACCOUNT_JSON env var on Render.")
             return None
         try:
-            creds = _sa.Credentials.from_service_account_file(
-                str(_KEYS_PATH),
+            creds = _sa.Credentials.from_service_account_info(
+                sa,
                 scopes=["https://www.googleapis.com/auth/datastore"],
             )
-            with open(_KEYS_PATH) as f:
-                project = json.load(f).get("project_id", "ninaivugal-73074")
-            _db_client = _fs.Client(credentials=creds, project=project)
+            _db_client = _fs.Client(credentials=creds, project=sa.get("project_id"))
         except Exception as e:
             logger.warning("Firestore init failed: %s — Firestore disabled", e)
             return None
@@ -113,12 +132,11 @@ def create_custom_token(user_id: str) -> str:
     Create a Firebase custom token signed with the service account private key.
     Uses PyJWT directly — no firebase-admin needed.
     """
-    if not _KEYS_PATH.exists():
-        raise RuntimeError("Firebase keys not found — cannot issue custom token")
+    sa = _load_service_account()
+    if sa is None:
+        raise RuntimeError("Firebase service account not found — cannot issue custom token")
     try:
         import jwt  # PyJWT, already in requirements
-        with open(_KEYS_PATH) as f:
-            sa = json.load(f)
         now = int(time.time())
         payload = {
             "iss": sa["client_email"],
